@@ -1,1 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.env
+.ipynb_checkpoints/
 
+# Data (never commit)
+data/raw/
+data/bronze/
+data/silver/
+data/gold/
+
+# Artifacts
+*.png
+*.html
+reports/
+
+# IDE & test caches
+.vscode/
+.idea/
+.pytest_cache/
+.mypy_cache/
+.coverage
+.streamlit/
+*.log
