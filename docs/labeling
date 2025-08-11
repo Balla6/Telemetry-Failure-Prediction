@@ -1,1 +1,30 @@
+# Incident Labeling — Definition, Computation, Prevalence, and Splits
+
+## Incident Definition (from Phase 0)
+An incident starts at minute `t₀` if, for **≥ 5 consecutive minutes**, either condition holds:
+- `latency_p95_ms > 1200` **OR**
+- `error_rate ≥ 0.05`
+
+## How to Compute `incident_start`
+1. For each `service_id`, scan rows **chronologically**.
+2. Find any run of **≥ 5 minutes** where **either** condition holds.
+3. Mark the **first minute** of that run as `incident_start = 1`.
+4. **Enforce non-overlap:** after marking an incident at `t₀`, do **not** start a new incident until the previous run ends **and** the service returns to **healthy** (neither condition holds) for **≥ 5 minutes**.
+
+## How to Compute `y_label_15min` (training label)
+- At each minute `t`, set `y_label_15min = 1` **iff** there exists an `incident_start` in `[t, t + 15]` for the **same** `service_id`.
+- Otherwise, set `y_label_15min = 0`.
+
+> This ensures we only use information available at time `t` (**no leakage**).
+
+## Expected Prevalence (sanity check)
+- Target: ~**0.5 incidents/service/day**  
+- With a 15-minute horizon ⇒ **~15 positive label-minutes/day** per service  
+- That’s **~1.0%** of minutes per service  
+- With **50 services** over **30 days** ⇒ overall positive rate around **0.5–1.0%** (intentional class imbalance)
+
+## Time Splits (lock now)
+- **Train:** Days 1–21  
+- **Val:** Days 22–26  
+- **Test:** Days 27–30
 
