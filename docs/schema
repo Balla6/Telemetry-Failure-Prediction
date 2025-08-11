@@ -1,1 +1,37 @@
+# Telemetry Dataset — Granularity, Volume, Schema & Contracts
+
+## Granularity
+- 1-minute rows per `service_id` (micro-batch later).
+
+## Target Volume
+- `30 days × 24 × 60 = 43,200` rows per service.
+- With `50` services ⇒ **2,160,000** rows total.
+
+## Columns (source)
+- `timestamp` (UTC, ISO8601) — minute-aligned, no gaps
+- `service_id` (string) — e.g., `svc_001 … svc_050`
+- `env` (string) — `prod` (canary optional)
+- `request_count` (int32) — ≥ 0
+- `error_count` (int32) — 0..`request_count`
+- `error_rate` (float32) — `error_count / request_count` (computed)
+- `latency_p50_ms` (float32)
+- `latency_p95_ms` (float32)
+- `cpu_pct` (float32) — 0–100
+- `mem_pct` (float32) — 0–100
+- `disk_io_mb_s` (float32) — ≥ 0
+- `net_in_mb_s` (float32) — ≥ 0
+- `net_out_mb_s` (float32) — ≥ 0
+- `status_2xx` (int32) — counts per minute
+- `status_4xx` (int32)
+- `status_5xx` (int32)
+- `incident_start` (bool) — ground truth: 1 if an incident begins at this minute
+- `y_label_15min` (bool) — prediction label: 1 if an incident starts within `[t, t+15]`
+
+## Data Contracts (to enforce in Phase 3)
+- No missing `timestamp`, `service_id`
+- Monotonic minute sequence per service (no back-in-time)
+- `request_count = status_2xx + status_4xx + status_5xx`
+- `error_count ≈ status_4xx + status_5xx` (allow small noise tolerance)
+- Ranges: `cpu_pct`/`mem_pct` ∈ [0, 100]; rates ≥ 0; latencies > 0
+- `latency_p95_ms ≥ latency_p50_ms` always
 
