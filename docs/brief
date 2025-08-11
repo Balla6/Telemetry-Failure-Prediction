@@ -1,0 +1,89 @@
+Problem (1-liner):
+Predict service incidents (crashes or latency spikes) 15 minutes before they start and raise high-precision alerts, with drift monitoring and a live dashboard.
+
+Product context:
+A cloud Web API service with per-minute telemetry (requests, errors, latency, CPU, memory, I/O) across multiple service_ids.
+
+Incident definition (what we predict):
+An incident starts when either condition holds for ≥ 5 consecutive minutes:
+
+P95 latency > 1200 ms, or
+
+Error rate ≥ 5% (errors / requests)
+
+Prediction horizon (labeling):
+At time t, the label y(t) = 1 if an incident begins within [t, t + 15 min] for that service_id. Otherwise 0.
+
+Alert policy (budget & hygiene):
+
+Max 5 alerts/day (per environment)
+
+Cooldown: 30 minutes per service_id after an alert
+
+Aggregation: alert only if 2 consecutive predictions exceed the threshold
+
+Success criteria (ship bar):
+
+Precision ≥ 0.80
+
+Recall ≥ 0.60
+
+Median lead time ≥ 10 min
+
+PR-AUC ≥ 0.65 on time-split test
+
+Drift monitors in place (data & concept) with documented actions
+
+Scope of telemetry (per minute unless noted):
+
+requests, errors, error_rate = errors/requests
+
+latency_p50, latency_p95
+
+cpu_pct, mem_pct, disk_io, net_in, net_out
+
+status_code_* counts (e.g., 2xx/4xx/5xx)
+
+service_id, timestamp (UTC)
+
+Non-goals (for now):
+
+Root-cause localization per microservice
+
+Cost-aware auto-scaling control loops
+
+Real streaming infra (we’ll simulate micro-batches)
+
+Risks & mitigations:
+
+Synthetic bias: use multiple failure modes (traffic surges, resource saturation, dependency flakiness).
+
+Label leakage: strict time alignment & rolling features only.
+
+Alert fatigue: threshold to alert budget + cooldown + aggregation.
+
+OKRs (2-week target):
+
+O1: Catch incidents early with few false alarms
+
+KR1: Precision ≥ 0.80; KR2: Recall ≥ 0.60; KR3: Median lead time ≥ 10 min.
+
+O2: Be trustworthy & maintainable
+
+KR4: Data contracts catch >95% schema/range breaks.
+
+KR5: Drift detection triggers on synthetic shifts with <5 min detection delay.
+
+O3: Make it demo-ready
+
+KR6: Dashboard shows KPIs, alert feed with SHAP reasons, drift panel, data quality panel.
+
+KR7: One-page exec memo and on-call runbook completed.
+
+Glossary:
+
+Lead time: incident start time minus alert time.
+
+Drift: change in data distribution (data drift) or model relationship (concept drift).
+
+Guardrails: constraints like alert budget & cooldown.
