@@ -1,1 +1,20 @@
+python-dateutil
+pandas
+pyarrow
+numpy
+scikit-learn
+xgboost
+matplotlib
+plotly
+tqdm
+pydantic
+joblib
+great-expectations
+statsmodels
+scipy
+shap
+streamlit
+duckdb
+pyyaml
+pytest
 
