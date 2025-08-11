@@ -1,1 +1,28 @@
+# Simulation Scenarios — Normal Patterns, Failures, DQ Glitches, Drift, Incident Targets
+
+## Normal Patterns
+- **Diurnal seasonality:** traffic higher 09:00–22:00 local; weekly dip on weekends.
+- **Latency scaling:** latencies grow with traffic and CPU/memory pressure.
+- **Status mix:** mostly `2xx`, small `4xx`, tiny `5xx`.
+
+## Failure Modes to Inject *(randomized per service/day)*
+- **Traffic surge** → queueing → `latency_p95_ms` spikes.
+- **CPU saturation (hot code path)** → `cpu_pct` ↑, latency ↑.
+- **Memory leak** → `mem_pct` ↑ slowly; once `> 85%`, errors & latency spike.
+- **Dependency flakiness** → sudden `5xx` burst; may co-occur with latency.
+- **Network degradation** → `net_in`/`net_out` unstable, latency ↑ with errors.
+
+## Data Quality Glitches *(to test contracts)*
+- **Day 10:** one service emits a negative `disk_io_mb_s` for 3 minutes *(should be caught)*.
+- **Day 18:** missing minute at `xx:17` for 5 services.
+- **Day 24:** `status_2xx + status_4xx + status_5xx ≠ request_count` for a few rows.
+
+## Drift Plan
+- **Data drift (Day 25+):** higher evening traffic → more load; latency baseline **+10%**.
+- **Concept drift (Day 20+):** new failure path where latency spikes **without** CPU rising *(changes feature–label relationship)*.
+
+## Incident Frequency Targets
+- Mean ≈ **0.5 incidents/service/day** *(Poisson)*.
+- Each incident lasts **5–30 minutes** *(geometric)*.
+- **Cooldown:** incidents per service spaced by **≥ 60 minutes** on average.
 
