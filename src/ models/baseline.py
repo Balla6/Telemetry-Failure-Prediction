@@ -1,1 +1,1 @@
-
+if __name__ == "__main__": print("baseline placeholder")
