@@ -1,5 +1,3 @@
-
-```yaml
 project:
   seed: 42
   timezone: "UTC"
@@ -49,10 +47,9 @@ alerting:
   recall_target: 0.60
 
 drift:
-  data_drift_method: "psi"     # psi or ks
+  data_drift_method: "psi"
   psi_warn: 0.1
   psi_alert: 0.25
-  concept_drift_window_min: 1440  # 1 day window
+  concept_drift_window_min: 1440
   health_drop_warn: 0.05
   health_drop_alert: 0.10
-
