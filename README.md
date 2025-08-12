@@ -18,3 +18,26 @@ make all
 
 # 3) run dashboard
 make dash
+
+
+## Results
+
+**Model:** XGBoost on engineered time-series features  
+**Data:** 30 days × 50 services @ 1-min frequency (synthetic telemetry)
+
+**Validation**
+- PR-AUC: **0.1070**
+- Calibrated threshold for demo: **0.976**
+- Precision @thr: **0.326**
+- Recall @thr: **0.103**
+- Alerts fired (VAL): **227**
+
+**Test (policy view)**
+- Cooldown: **15 minutes**
+- See `reports/alert_policy.md` for precision/recall and alerts/day
+
+**Artifacts**
+- Gold predictions: `data/gold/...`
+- Model: `models/xgb_model.json`
+- Reports: `reports/xgb_metrics.md`, `reports/alert_policy.md`
+
