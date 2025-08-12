@@ -14,7 +14,8 @@ data/gold/
 # Artifacts
 *.png
 *.html
-reports/
+reports/*
+!reports/*.md
 
 # IDE & test caches
 .vscode/
