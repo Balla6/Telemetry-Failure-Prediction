@@ -40,11 +40,14 @@ model:
   class_weight: "balanced"
 
 alerting:
-  max_alerts_per_day: 5
-  cooldown_min: 30
-  consecutive_hits_required: 2
   precision_target: 0.80
+  default_threshold: 0.976
+  cooldown_min: 15
+  max_alerts_per_day: 5
+  consecutive_hits_required: 2
   recall_target: 0.60
+
+  
 
 drift:
   data_drift_method: "psi"
