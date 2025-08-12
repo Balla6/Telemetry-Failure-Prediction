@@ -1,8 +1,5 @@
 # app/dashboard.py
 # Streamlit dashboard for Telemetry Failure Prediction
-# - Reads gold predictions (val + test)
-# - Lets you tune threshold & cooldown
-# - Shows precision/recall, alert counts, per-day volume, and top alerts
 
 import glob
 from pathlib import Path
@@ -16,22 +13,18 @@ TARGET = "y_label_15min"
 
 # -------- config helpers --------
 def load_defaults(conf_path: str = "conf/config.yaml"):
-    """Read config defaults; fall back to sensible values if missing."""
     try:
         with open(conf_path, "r", encoding="utf-8") as f:
             y = yaml.safe_load(f) or {}
     except FileNotFoundError:
         y = {}
-
     data = y.get("data", {})
     alert = y.get("alerting", {})
-
     gold_dir = str(data.get("gold_dir", "data/gold"))
     default_thr = float(alert.get("default_threshold", 0.976))
     default_cd = int(alert.get("cooldown_min", 15))
     default_prec_target = float(alert.get("precision_target", 0.80))
     return gold_dir, default_thr, default_cd, default_prec_target
-
 
 GOLD_DIR, DEFAULT_THR, DEFAULT_COOLDOWN, DEFAULT_PRECISION_TARGET = load_defaults()
 
@@ -87,80 +80,85 @@ def apply_cooldown(df: pd.DataFrame, cooldown_min: int, thr: float) -> pd.DataFr
 
 # ---------------- UI ----------------
 st.set_page_config(page_title="Telemetry Failure Prediction", layout="wide")
-st.title("Telemetry Failure Prediction — Alerts & Thresholds")
+st.title("Telemetry Failure Prediction")
 
 df = load_gold(GOLD_DIR)
 val = df[df["split"] == "val"].copy()
 test = df[df["split"] == "test"].copy()
 
-# Sidebar controls
-st.sidebar.header("Controls")
-precision_target = st.sidebar.slider(
-    "Precision target (for auto-calibrate from VAL)",
-    0.5, 0.95, float(DEFAULT_PRECISION_TARGET), 0.01
-)
+tab_alerts, tab_drift = st.tabs(["Alerts & Thresholds", "Drift"])
 
-auto_thr = calibrate_threshold(val[TARGET].to_numpy(), val["score"].to_numpy(), precision_target)
+with tab_alerts:
+    st.header("Alerts & Thresholds")
+    st.sidebar.header("Controls")
+    precision_target = st.sidebar.slider(
+        "Precision target (for auto-calibrate from VAL)",
+        0.5, 0.95, float(DEFAULT_PRECISION_TARGET), 0.01
+    )
+    auto_thr = calibrate_threshold(val[TARGET].to_numpy(), val["score"].to_numpy(), precision_target)
 
-threshold = st.sidebar.slider(
-    "Threshold (manual)",
-    0.0, 1.0,
-    value=float(DEFAULT_THR), step=0.0001, key="threshold"
-)
-cooldown = st.sidebar.slider(
-    "Cooldown (minutes)",
-    0, 60,
-    value=int(DEFAULT_COOLDOWN), step=1, key="cooldown"
-)
+    threshold = st.sidebar.slider(
+        "Threshold (manual)",
+        0.0, 1.0,
+        value=float(DEFAULT_THR), step=0.0001, key="threshold"
+    )
+    cooldown = st.sidebar.slider(
+        "Cooldown (minutes)",
+        0, 60,
+        value=int(DEFAULT_COOLDOWN), step=1, key="cooldown"
+    )
 
-# Convenience buttons
-colb1, colb2 = st.sidebar.columns(2)
-if colb1.button("Use auto thr"):
-    st.session_state.threshold = float(round(auto_thr, 4))
-    threshold = st.session_state.threshold
-if colb2.button("Use config"):
-    st.session_state.threshold = float(DEFAULT_THR)
-    st.session_state.cooldown = int(DEFAULT_COOLDOWN)
-    threshold = st.session_state.threshold
-    cooldown = st.session_state.cooldown
+    colb1, colb2 = st.sidebar.columns(2)
+    if colb1.button("Use auto thr"):
+        st.session_state.threshold = float(round(auto_thr, 4))
+        threshold = st.session_state.threshold
+    if colb2.button("Use config"):
+        st.session_state.threshold = float(DEFAULT_THR)
+        st.session_state.cooldown = int(DEFAULT_COOLDOWN)
+        threshold = st.session_state.threshold
+        cooldown = st.session_state.cooldown
 
-# Headline metrics (VAL)
-ap_val = average_precision_score(val[TARGET], val["score"])
-p_val, r_val, n_val = event_metrics(val, threshold)
-st.subheader("Validation (used to calibrate)")
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("PR-AUC (VAL)", f"{ap_val:.4f}")
-c2.metric("Precision @thr", f"{p_val:.3f}")
-c3.metric("Recall @thr", f"{r_val:.3f}")
-c4.metric("Alerts fired (VAL)", f"{n_val}")
+    ap_val = average_precision_score(val[TARGET], val["score"])
+    p_val, r_val, n_val = event_metrics(val, threshold)
+    st.subheader("Validation (used to calibrate)")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("PR-AUC (VAL)", f"{ap_val:.4f}")
+    c2.metric("Precision @thr", f"{p_val:.3f}")
+    c3.metric("Recall @thr", f"{r_val:.3f}")
+    c4.metric("Alerts fired (VAL)", f"{n_val}")
 
-# Test with cooldown
-test_cd = apply_cooldown(test, cooldown, threshold)
-p_te, r_te, n_te = event_metrics(test_cd, threshold)
+    test_cd = apply_cooldown(test, cooldown, threshold)
+    p_te, r_te, n_te = event_metrics(test_cd, threshold)
+    st.subheader("Test (policy view)")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Precision @thr", f"{p_te:.3f}")
+    c2.metric("Recall @thr", f"{r_te:.3f}")
+    c3.metric("Alerts fired (TEST)", f"{n_te}")
 
-st.subheader("Test (policy view)")
-c1, c2, c3 = st.columns(3)
-c1.metric("Precision @thr", f"{p_te:.3f}")
-c2.metric("Recall @thr", f"{r_te:.3f}")
-c3.metric("Alerts fired (TEST)", f"{n_te}")
+    per_day = (
+        test_cd.assign(date=test_cd["timestamp"].dt.tz_convert(None).dt.strftime("%Y-%m-%d"))
+        .groupby("date")["alert"].sum().reset_index().rename(columns={"alert":"alerts"})
+        .sort_values("date")
+    )
+    st.markdown("#### Alerts per day (TEST)")
+    st.line_chart(per_day.set_index("date"))
 
-# Per-day alert volume
-per_day = (
-    test_cd.assign(date=test_cd["timestamp"].dt.tz_convert(None).dt.strftime("%Y-%m-%d"))
-    .groupby("date")["alert"].sum().reset_index().rename(columns={"alert":"alerts"})
-    .sort_values("date")
-)
-st.markdown("#### Alerts per day (TEST)")
-st.line_chart(per_day.set_index("date"))
+    st.markdown("#### Top 50 alerts (TEST)")
+    top = test_cd.loc[test_cd["score"] >= threshold, ["timestamp","service_id","score",TARGET]] \
+                .sort_values("score", ascending=False).head(50)
+    st.dataframe(top.reset_index(drop=True))
 
-# Top alerts preview
-st.markdown("#### Top 50 alerts (TEST)")
-top = test_cd.loc[test_cd["score"] >= threshold, ["timestamp","service_id","score",TARGET]] \
-            .sort_values("score", ascending=False).head(50)
-st.dataframe(top.reset_index(drop=True))
+    st.caption(
+        f"Config defaults — thr: {DEFAULT_THR:.4f} • cooldown: {DEFAULT_COOLDOWN} min • "
+        f"VAL auto-calibrated thr @ precision≥{precision_target:.2f}: {auto_thr:.4f}"
+    )
 
-# Footer
-st.caption(
-    f"Config defaults — thr: {DEFAULT_THR:.4f} • cooldown: {DEFAULT_COOLDOWN} min • "
-    f"VAL auto-calibrated thr @ precision≥{precision_target:.2f}: {auto_thr:.4f}"
-)
+with tab_drift:
+    st.header("Drift (VAL → TEST)")
+    path = Path("reports/drift_report.md")
+    if path.exists():
+        st.download_button("Download drift_report.md", data=path.read_bytes(),
+                           file_name="drift_report.md", mime="text/markdown")
+        st.markdown(path.read_text(encoding="utf-8"))
+    else:
+        st.info("Run:  `export PYTHONPATH=.; python src/monitoring/drift.py --conf conf/config.yaml`")
