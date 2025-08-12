@@ -9,11 +9,31 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import streamlit as st
+import yaml
 from sklearn.metrics import average_precision_score, precision_recall_curve
 
 TARGET = "y_label_15min"
-DEFAULT_THR = 0.976
-DEFAULT_COOLDOWN = 15
+
+# -------- config helpers --------
+def load_defaults(conf_path: str = "conf/config.yaml"):
+    """Read config defaults; fall back to sensible values if missing."""
+    try:
+        with open(conf_path, "r", encoding="utf-8") as f:
+            y = yaml.safe_load(f) or {}
+    except FileNotFoundError:
+        y = {}
+
+    data = y.get("data", {})
+    alert = y.get("alerting", {})
+
+    gold_dir = str(data.get("gold_dir", "data/gold"))
+    default_thr = float(alert.get("default_threshold", 0.976))
+    default_cd = int(alert.get("cooldown_min", 15))
+    default_prec_target = float(alert.get("precision_target", 0.80))
+    return gold_dir, default_thr, default_cd, default_prec_target
+
+
+GOLD_DIR, DEFAULT_THR, DEFAULT_COOLDOWN, DEFAULT_PRECISION_TARGET = load_defaults()
 
 @st.cache_data(show_spinner=False)
 def load_gold(gold_dir: str) -> pd.DataFrame:
@@ -69,31 +89,40 @@ def apply_cooldown(df: pd.DataFrame, cooldown_min: int, thr: float) -> pd.DataFr
 st.set_page_config(page_title="Telemetry Failure Prediction", layout="wide")
 st.title("Telemetry Failure Prediction — Alerts & Thresholds")
 
-gold_dir = "data/gold"
-df = load_gold(gold_dir)
+df = load_gold(GOLD_DIR)
 val = df[df["split"] == "val"].copy()
 test = df[df["split"] == "test"].copy()
 
 # Sidebar controls
 st.sidebar.header("Controls")
-precision_target = st.sidebar.slider("Precision target (for auto-calibrate from VAL)", 0.5, 0.95, 0.80, 0.01)
+precision_target = st.sidebar.slider(
+    "Precision target (for auto-calibrate from VAL)",
+    0.5, 0.95, float(DEFAULT_PRECISION_TARGET), 0.01
+)
 
 auto_thr = calibrate_threshold(val[TARGET].to_numpy(), val["score"].to_numpy(), precision_target)
 
-# Sliders bound to session state; default to 0.976 / 15 on first load
 threshold = st.sidebar.slider(
-    "Threshold (manual)", 0.0, 1.0,
+    "Threshold (manual)",
+    0.0, 1.0,
     value=float(DEFAULT_THR), step=0.0001, key="threshold"
 )
 cooldown = st.sidebar.slider(
-    "Cooldown (minutes)", 0, 60,
+    "Cooldown (minutes)",
+    0, 60,
     value=int(DEFAULT_COOLDOWN), step=1, key="cooldown"
 )
 
-# Convenience button: snap threshold to the auto-calibrated value
-if st.sidebar.button(f"Use auto-calibrated (VAL): {auto_thr:.4f}"):
+# Convenience buttons
+colb1, colb2 = st.sidebar.columns(2)
+if colb1.button("Use auto thr"):
     st.session_state.threshold = float(round(auto_thr, 4))
     threshold = st.session_state.threshold
+if colb2.button("Use config"):
+    st.session_state.threshold = float(DEFAULT_THR)
+    st.session_state.cooldown = int(DEFAULT_COOLDOWN)
+    threshold = st.session_state.threshold
+    cooldown = st.session_state.cooldown
 
 # Headline metrics (VAL)
 ap_val = average_precision_score(val[TARGET], val["score"])
@@ -132,6 +161,6 @@ st.dataframe(top.reset_index(drop=True))
 
 # Footer
 st.caption(
-    f"Auto-calibrated threshold from VAL @ precision≥{precision_target:.2f}: {auto_thr:.4f}  •  "
-    f"Current threshold: {threshold:.4f}  •  Cooldown: {cooldown} min"
+    f"Config defaults — thr: {DEFAULT_THR:.4f} • cooldown: {DEFAULT_COOLDOWN} min • "
+    f"VAL auto-calibrated thr @ precision≥{precision_target:.2f}: {auto_thr:.4f}"
 )
